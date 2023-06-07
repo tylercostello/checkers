@@ -27,6 +27,15 @@ gameOn=True
 56 57 58 59 60 61 62 63 
 """
 
+def callArm(start, end, remove):
+    #start is the checker starting index
+    #end is checker ending index
+    #remove will be position of checker to be removed if needed
+    #otherwise -1
+    pass
+
+
+
 #get a position input from user
 def getPos():
     try:
