@@ -1,6 +1,14 @@
+
+#board array
 board=[0]*64
+
+#positions in the top row
 topRow=[0,1,2,3,4,5,6,7]
+
+#positions in the bottom row
 bottomRow=[56,57,58,59,60,61,62,63]
+
+#game is happening
 gameOn=True
 #0 is an empty space
 #1 is a black checker
@@ -18,12 +26,16 @@ gameOn=True
 48 49 50 51 52 53 54 55 
 56 57 58 59 60 61 62 63 
 """
+
+#get a position input from user
 def getPos():
     try:
         return int(input(""))
     except:
         print("Invalid input. Please enter number between 0 and 63")
         return getPos()
+
+#forfeit game
 def forfeit(winner):
     global gameOn
     gameOn=False
@@ -32,25 +44,31 @@ def forfeit(winner):
     elif winner == 2:
         print("Player 2 Wins!")
 
-
+#moving a piece from the top of the board to the bottom of the board
 def moveDown(board, start, end, enemy):
     global wasTake
-    #black pieces
+    #black pieces typically
+    #check if move is diagonal and not going off end of board
+    #makes sure you dont move one space after a take
     if ((end-start==9 and start%8 != 7) or (end-start==7 and start%8!=8)) and not wasTake:
         if board[end]==0:
-            #valid move
             board[end]=board[start]
             board[start]=0
             wasTake=False
+            #kings black piece
             if enemy==0 and end in bottomRow:
                 board[end]=3
             return True
+    #taking
     elif (end-start==18 and start%8 < 6):
+        #makes sure enemy space is being jumped and not and empty or friendly space
+        #makes sure the landing spot is unoccupied
         if board[start+9]%2==enemy and board[start+9]!=0 and board[end]==0:
             board[end]=board[start]
             board[start+9]=0
             board[start]=0
             wasTake = True
+            #kings black piece
             if enemy==0 and end in bottomRow:
                 board[end]=3
             return True
@@ -68,13 +86,13 @@ def moveDown(board, start, end, enemy):
 
 def moveUp(board, start, end, enemy):
     global wasTake
-    #red pieces
+    #red pieces typically
     if ((start-end==9 and end%8 != 7) or (start-end==7 and end%8!=8)) and not wasTake:
         if board[end]==0:
-            #valid move
             board[end]=board[start]
             board[start]=0
             wasTake = False
+            #kings red piece
             if enemy==1 and end in topRow:
                 board[end]=4
             return True
@@ -84,6 +102,7 @@ def moveUp(board, start, end, enemy):
             board[start-9]=0
             board[start]=0
             wasTake = True
+            #kings red piece
             if enemy==1 and end in topRow:
                 board[end]=4
             return True
@@ -93,12 +112,14 @@ def moveUp(board, start, end, enemy):
             board[start-7]=0
             board[start]=0
             wasTake = True
+            #kings red piece
             if enemy==1 and end in topRow:
                 board[end]=4
             return True
     print("Invalid")
     return False
-
+#determines which move is being made
+#0 means enemy piece are black, 1 means enemy pieces are red
 def makeMove(board, start, end, player):
     if player==1:
         #black pieces
@@ -124,12 +145,13 @@ def makeMove(board, start, end, player):
         return False
     return False
 
-
+#display the ascii board
 def printBoard(board):
     for i in range(len(board)):
         print(board[i], end =" ")
         if i%8==7:
             print("")
+#check if all enemy pieces are taken
 def isOver(board):
     if 1 not in board and 3 not in board:
         return 2
@@ -139,7 +161,7 @@ def isOver(board):
         return 0
 
 
-
+#creates initial setup
 def setupBoard(board):
     for i in range(1,8,2):
         board[i]=1
@@ -153,6 +175,7 @@ def setupBoard(board):
         board[i]=2
     for i in range(56,64,2):
         board[i]=2
+#player 1 turn, did not take prev move
 def p1Turn(board):
     global wasTake
     printBoard(board)
@@ -160,8 +183,8 @@ def p1Turn(board):
     print("Type current piece position or -1 to Forfeit: ")
     start = getPos()
     print(start)
+
     if start==-1:
-        board = [2] * 64
         forfeit(2)
         return True
     end = print("Type final piece position: ")
@@ -170,10 +193,10 @@ def p1Turn(board):
     moveValid=makeMove(board, start, end, 1)
     if not moveValid:
         p1Turn(board)
-    print(wasTake)
     if wasTake:
         p1Took(board, end)
     return True
+#p2 turn, did not take prev move
 def p2Turn(board):
     global wasTake
     printBoard(board)
@@ -181,7 +204,6 @@ def p2Turn(board):
     print("Type current piece position or -1 to Forfeit: ")
     start = getPos()
     if start==-1:
-        board = [1] * 64
         forfeit(1)
         return True
     end = print("Type final piece position: ")
@@ -190,12 +212,14 @@ def p2Turn(board):
     if not moveValid:
         p2Turn(board)
     return True
+#p1 turn, took on prev move
 def p1Took(board, startPiece):
     global wasTake
     printBoard(board)
     print("Player 1")
     print("Start piece = "+str(startPiece))
-    end = int(input("Type final piece position or -1 to end turn: "))
+    print("Type final piece position or -1 to end turn: ")
+    end = getPos()
 
     if end == -1:
         wasTake=False
@@ -205,12 +229,14 @@ def p1Took(board, startPiece):
         p1Took(board, startPiece)
     else:
         p1Took(board, end)
+#p2 turn took on prev move
 def p2Took(board, startPiece):
     global wasTake
     printBoard(board)
     print("Player 2")
     print("Start piece = "+str(startPiece))
-    end = int(input("Type final piece position or -1 to end turn: "))
+    print("Type final piece position or -1 to end turn: ")
+    end = getPos()
     if end == -1:
         wasTake=False
         return True
@@ -224,9 +250,7 @@ def p2Took(board, startPiece):
 playerTurn=1
 wasTake=False
 setupBoard(board)
-
-#board[40]=1
-#board[58]=0
+#main loop
 while isOver(board)==0 and gameOn:
     if playerTurn==1:
         p1Turn(board)
