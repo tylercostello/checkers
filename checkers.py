@@ -67,6 +67,7 @@ def moveDown(board, start, end, enemy):
             #kings black piece
             if enemy==0 and end in bottomRow:
                 board[end]=3
+            callArm(start, end, -1)
             return True
     #taking
     elif (end-start==18 and start%8 < 6):
@@ -80,6 +81,7 @@ def moveDown(board, start, end, enemy):
             #kings black piece
             if enemy==0 and end in bottomRow:
                 board[end]=3
+            callArm(start, end, start+9)
             return True
     elif (end-start==14 and start%8 > 1):
         if board[start+7]%2==enemy and board[start+7]!=0 and board[end]==0:
@@ -89,6 +91,7 @@ def moveDown(board, start, end, enemy):
             wasTake = True
             if enemy==0 and end in bottomRow:
                 board[end]=3
+            callArm(start, end, start+7)
             return True
     print("Invalid")
     return False
@@ -104,6 +107,7 @@ def moveUp(board, start, end, enemy):
             #kings red piece
             if enemy==1 and end in topRow:
                 board[end]=4
+            callArm(start, end, -1)
             return True
     elif (start-end==18 and end%8 < 6):
         if board[start-9]%2==enemy and board[start-9]!=0 and board[end]==0:
@@ -114,6 +118,7 @@ def moveUp(board, start, end, enemy):
             #kings red piece
             if enemy==1 and end in topRow:
                 board[end]=4
+            callArm(start, end, start-9)
             return True
     elif (start-end==14 and end%8 > 1):
         if board[start-7]%2==enemy and board[start-7]!=0 and board[end]==0:
@@ -124,6 +129,7 @@ def moveUp(board, start, end, enemy):
             #kings red piece
             if enemy==1 and end in topRow:
                 board[end]=4
+            callArm(start, end, start-7)
             return True
     print("Invalid")
     return False
@@ -191,7 +197,6 @@ def p1Turn(board):
     print("Player 1")
     print("Type current piece position or -1 to Forfeit: ")
     start = getPos()
-    print(start)
 
     if start==-1:
         forfeit(2)
