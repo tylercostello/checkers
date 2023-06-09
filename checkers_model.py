@@ -56,33 +56,12 @@ class MoveGroupPythonInterfaceTutorial(object):
 
     def __init__(self):
         super(MoveGroupPythonInterfaceTutorial, self).__init__()
-
-        ## BEGIN_SUB_TUTORIAL setup
-        ##
-        ## First initialize `moveit_commander`_ and a `rospy`_ node:
         moveit_commander.roscpp_initialize(sys.argv)
         rospy.init_node("move_group_python_interface_tutorial", anonymous=True)
-
-        ## Instantiate a `RobotCommander`_ object. Provides information such as the robot's
-        ## kinematic model and the robot's current joint states
         robot = moveit_commander.RobotCommander()
-
-        ## Instantiate a `PlanningSceneInterface`_ object.  This provides a remote interface
-        ## for getting, setting, and updating the robot's internal understanding of the
-        ## surrounding world:
         scene = moveit_commander.PlanningSceneInterface()
-
-        ## Instantiate a `MoveGroupCommander`_ object.  This object is an interface
-        ## to a planning group (group of joints).  In this tutorial the group is the primary
-        ## arm joints in the Panda robot, so we set the group's name to "panda_arm".
-        ## If you are using a different robot, change this value to the name of your robot
-        ## arm planning group.
-        ## This interface can be used to plan and execute motions:
         group_name = "panda_arm"
         move_group = moveit_commander.MoveGroupCommander(group_name)
-
-        ## Create a `DisplayTrajectory`_ ROS publisher which is used to display
-        ## trajectories in Rviz:
         display_trajectory_publisher = rospy.Publisher(
             "/move_group/display_planned_path",
             moveit_msgs.msg.DisplayTrajectory,
@@ -96,15 +75,8 @@ class MoveGroupPythonInterfaceTutorial(object):
 
         marker_array = MarkerArray()
 
-        pieces_array = {} #pieceID is the name of the box/cylinder and positionNumber is the integer 0-63 which defines the current location of the piece on the board
+        pieces = {} #pieceID is the name of the box/cylinder and positionNumber is the integer 0-63 which defines the current location of the piece on the board
 
-        ## END_SUB_TUTORIAL
-
-        ## BEGIN_SUB_TUTORIAL basic_info
-        ##
-        ## Getting Basic Information
-        ## ^^^^^^^^^^^^^^^^^^^^^^^^^
-        # We can get the name of the reference frame for this robot:
         planning_frame = move_group.get_planning_frame()
         print("============ Planning frame: %s" % planning_frame)
 
@@ -134,7 +106,16 @@ class MoveGroupPythonInterfaceTutorial(object):
         self.planning_frame = planning_frame
         self.eef_link = eef_link
         self.group_names = group_names
-        self.pieces_array = pieces_array
+        self.pieces = pieces
+
+    def get_piece_at_location(self, location):
+        pieces = self.pieces
+        piece_name = ""
+        for name, loc in pieces.items():
+            if loc == location:
+                piece_name = name
+        return piece_name
+
 
     def go_to_joint_state(self): #home position
         move_group = self.move_group
@@ -202,7 +183,7 @@ class MoveGroupPythonInterfaceTutorial(object):
 
         # Note: We are just planning, not asking move_group to actually move the robot yet:
         return plan, fraction
-    
+    """ 
     def plan_cartesian_path_to_next_box(self, scale=1):
         move_group = self.move_group
         ## Cartesian Paths
@@ -225,74 +206,91 @@ class MoveGroupPythonInterfaceTutorial(object):
 
         # Note: We are just planning, not asking move_group to actually move the robot yet:
         return plan, fraction
+     """
+    def plan_and_execute_play(self,start,end,casualty=-1, scale=1):
+        move_group = self.move_group
+        pieces_array = self.pieces
+        #figure out what piece we are asked to move
+        print(start,end)
+        piece_id = self.get_piece_at_location(start)
+
+        #if piece needs to be deleted, figure out piece name and delete it from the scene
+        if(casualty!=-1):
+            oof_piece_id = self.get_piece_at_location(casualty)
+            self.remove_box(oof_piece_id)
+        
+        #start location
+        i_start = start // 8
+        j_start = start % 8
+        
+        #end location
+        i_end = end // 8
+        j_end = end % 8
+
+        #pick trajectory
+        pick_waypoints = []
+
+        wpose = move_group.get_current_pose().pose
+        wpose.position.x = 0.5 - 0.56 / 2 + 0.07 / 2 + i_start * 0.07
+        wpose.position.y = - 0.56 / 2 + 0.07 / 2 + j_start * 0.07	
+        wpose.position.z = 0.34    
+        wpose.orientation.x = 1
+        wpose.orientation.y = 0 
+        wpose.orientation.z = 0
+        wpose.orientation.w = 0
+        
+        pick_waypoints.append(copy.deepcopy(wpose))
+        (pick_plan, fraction) = move_group.compute_cartesian_path(
+            pick_waypoints, 0.01, 0.0  # waypoints to follow  # eef_step
+        )  # jump_threshold
+        
+        #once planning is completed, start doing stuff
+
+        self.execute_plan(pick_plan)
+        self.attach_box(piece_id)
+        self.go_to_joint_state() #return to home position before going to place location
+
+        #plan and execute second move
+        #place trajectory
+        place_waypoints = []
+
+        wpose = move_group.get_current_pose().pose
+        wpose.position.x = 0.5 - 0.56 / 2 + 0.07 / 2 + i_end * 0.07
+        wpose.position.y = - 0.56 / 2 + 0.07 / 2 + j_end * 0.07	
+        wpose.position.z = 0.34    
+        wpose.orientation.x = 1
+        wpose.orientation.y = 0 
+        wpose.orientation.z = 0
+        wpose.orientation.w = 0
+        
+        
+        place_waypoints.append(copy.deepcopy(wpose))
+        (place_plan, fraction) = move_group.compute_cartesian_path(
+            place_waypoints, 0.01, 0.0  # waypoints to follow  # eef_step
+        )  # jump_threshold
+
+        self.execute_plan(place_plan)
+        self.detach_box(piece_id)
+        pieces_array[piece_id] = end #update piece location in array after move
+        self.go_to_joint_state()
 
     def display_trajectory(self, plan):
-        # Copy class variables to local variables to make the web tutorials more clear.
-        # In practice, you should use the class variables directly unless you have a good
-        # reason not to.
         robot = self.robot
         display_trajectory_publisher = self.display_trajectory_publisher
-
-        ## BEGIN_SUB_TUTORIAL display_trajectory
-        ##
-        ## Displaying a Trajectory
-        ## ^^^^^^^^^^^^^^^^^^^^^^^
-        ## You can ask RViz to visualize a plan (aka trajectory) for you. But the
-        ## group.plan() method does this automatically so this is not that useful
-        ## here (it just displays the same trajectory again):
-        ##
-        ## A `DisplayTrajectory`_ msg has two primary fields, trajectory_start and trajectory.
-        ## We populate the trajectory_start with our current robot state to copy over
-        ## any AttachedCollisionObjects and add our plan to the trajectory.
         display_trajectory = moveit_msgs.msg.DisplayTrajectory()
         display_trajectory.trajectory_start = robot.get_current_state()
         display_trajectory.trajectory.append(plan)
-        # Publish
         display_trajectory_publisher.publish(display_trajectory)
 
-        ## END_SUB_TUTORIAL
-
     def execute_plan(self, plan):
-        # Copy class variables to local variables to make the web tutorials more clear.
-        # In practice, you should use the class variables directly unless you have a good
-        # reason not to.
         move_group = self.move_group
-
-        ## BEGIN_SUB_TUTORIAL execute_plan
-        ##
-        ## Executing a Plan
-        ## ^^^^^^^^^^^^^^^^
-        ## Use execute if you would like the robot to follow
-        ## the plan that has already been computed:
         move_group.execute(plan, wait=True)
-
-        ## **Note:** The robot's current joint state must be within some tolerance of the
-        ## first waypoint in the `RobotTrajectory`_ or ``execute()`` will fail
-        ## END_SUB_TUTORIAL
 
     def wait_for_state_update(
         self, box_is_known=False, box_is_attached=False, timeout=4
     ):
-        # Copy class variables to local variables to make the web tutorials more clear.
-        # In practice, you should use the class variables directly unless you have a good
-        # reason not to.
         box_name = self.box_name
         scene = self.scene
-
-        ## BEGIN_SUB_TUTORIAL wait_for_scene_update
-        ##
-        ## Ensuring Collision Updates Are Received
-        ## ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        ## If the Python node was just created (https://github.com/ros/ros_comm/issues/176),
-        ## or dies before actually publishing the scene update message, the message
-        ## could get lost and the box will not appear. To ensure that the updates are
-        ## made, we wait until we see the changes reflected in the
-        ## ``get_attached_objects()`` and ``get_known_object_names()`` lists.
-        ## For the purpose of this tutorial, we call this function after adding,
-        ## removing, attaching or detaching an object in the planning scene. We then wait
-        ## until the updates have been made or ``timeout`` seconds have passed.
-        ## To avoid waiting for scene updates like this at all, initialize the
-        ## planning scene interface with  ``synchronous = True``.
         start = rospy.get_time()
         seconds = rospy.get_time()
         while (seconds - start < timeout) and not rospy.is_shutdown():
@@ -343,7 +341,7 @@ class MoveGroupPythonInterfaceTutorial(object):
         marker_id = 0
         num_squares_x = 8 #int(box_size[0] / marker.scale.x)
         num_squares_y = 8 #int(box_size[1] / marker.scale.y)
-        pieces_array = self.pieces_array
+        pieces_array = self.pieces
         for i in range(num_squares_x):
             for j in range(num_squares_y):
                 #universal creation code
@@ -384,9 +382,9 @@ class MoveGroupPythonInterfaceTutorial(object):
                         bok_pose.pose.position.x = marker.pose.position.x
                         bok_pose.pose.position.y = marker.pose.position.y
                         bok_pose.pose.position.z = marker.pose.position.z + 0.025  # Above the marker
-                        bok_size = (0.05, 0.05, 0.05)
+                        bok_size = (0.04, 0.04, 0.04)
                         if i < 3:
-                            scene.add_cylinder(bok_name, bok_pose, 0.05, 0.025)
+                            scene.add_cylinder(bok_name, bok_pose, 0.05, 0.02)
                         else:
                             scene.add_box(bok_name, bok_pose, size=bok_size)
                         pieces_array[bok_name] = marker_id
@@ -406,7 +404,7 @@ class MoveGroupPythonInterfaceTutorial(object):
         self.box_name = box_name
         return self.wait_for_state_update(box_is_known=True, timeout=timeout)
     
-    """ def move_piece(self, timeout=4, start, end, remove):
+    """ def move_checker_board_square(self, timeout=4, start, end, remove):
        #start position (0-63), end position (0-63), remove (position of a piece to remove (0-63), -1 if null)
 
 
@@ -433,76 +431,49 @@ class MoveGroupPythonInterfaceTutorial(object):
 
         return self.wait_for_state_update(box_is_known=True, timeout=timeout)
  """
-    def attach_box(self, timeout=4):
-        # Copy class variables to local variables to make the web tutorials more clear.
-        # In practice, you should use the class variables directly unless you have a good
-        # reason not to.
-        box_name = self.box_name
+    def attach_box(self, box, timeout=4):
+        box_name = box #box name should be its id in "boxi_j" form
         robot = self.robot
         scene = self.scene
         eef_link = self.eef_link
         group_names = self.group_names
-
-        ## BEGIN_SUB_TUTORIAL attach_object
-        ##
-        ## Attaching Objects to the Robot
-        ## ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        ## Next, we will attach the box to the Panda wrist. Manipulating objects requires the
-        ## robot be able to touch them without the planning scene reporting the contact as a
-        ## collision. By adding link names to the ``touch_links`` array, we are telling the
-        ## planning scene to ignore collisions between those links and the box. For the Panda
-        ## robot, we set ``grasping_group = 'hand'``. If you are using a different robot,
-        ## you should change this value to the name of your end effector group name.
         grasping_group = "panda_hand"
         touch_links = robot.get_link_names(group=grasping_group)
         scene.attach_box(eef_link, box_name, touch_links=touch_links)
-        ## END_SUB_TUTORIAL
+        hand_group = moveit_commander.MoveGroupCommander("panda_hand")
+        hand_goal = hand_group.get_current_joint_values()
+        hand_goal[0] = 0.02
+        hand_goal[1] = 0.02
+        hand_group.go(hand_goal, wait = True)
 
-        # We wait for the planning scene to update.
+
         return self.wait_for_state_update(
             box_is_attached=True, box_is_known=False, timeout=timeout
         )
 
-    def detach_box(self, timeout=4):
-        # Copy class variables to local variables to make the web tutorials more clear.
-        # In practice, you should use the class variables directly unless you have a good
-        # reason not to.
-        box_name = self.box_name
+    def detach_box(self, box, timeout=4):
+        box_name = box #box name should be its id in "boxi_j" form
+        robot = self.robot
         scene = self.scene
         eef_link = self.eef_link
-
-        ## BEGIN_SUB_TUTORIAL detach_object
-        ##
-        ## Detaching Objects from the Robot
-        ## ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        ## We can also detach and remove the object from the planning scene:
         scene.remove_attached_object(eef_link, name=box_name)
-        ## END_SUB_TUTORIAL
 
-        # We wait for the planning scene to update.
+        hand_group = moveit_commander.MoveGroupCommander("panda_hand")
+        hand_goal = hand_group.get_current_joint_values()
+        hand_goal[0] = 0.04
+        hand_goal[1] = 0.04
+        hand_group.go(hand_goal, wait = True)
+
         return self.wait_for_state_update(
             box_is_known=True, box_is_attached=False, timeout=timeout
         )
 
-    def remove_box(self, timeout=4):
-        # Copy class variables to local variables to make the web tutorials more clear.
-        # In practice, you should use the class variables directly unless you have a good
-        # reason not to.
-        box_name = self.box_name
+    def remove_box(self, box, timeout=4):
+        # only need to use this if removing piece from scene entirely
+        box_name = box #box name should be its id in "boxi_j" form
         scene = self.scene
-
-        ## BEGIN_SUB_TUTORIAL remove_object
-        ##
-        ## Removing Objects from the Planning Scene
-        ## ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        ## We can remove the box from the world.
         scene.remove_world_object(box_name)
-        scene.remove_world_object("table1")
-
-        ## **Note:** The object must be detached before we can remove it from the world
-        ## END_SUB_TUTORIAL
-
-        # We wait for the planning scene to update.
+        #scene.remove_world_object("table1")
         return self.wait_for_state_update(
             box_is_attached=False, box_is_known=False, timeout=timeout
         )
@@ -516,56 +487,40 @@ def main():
         tutorial = MoveGroupPythonInterfaceTutorial()
 
         input(
-            "============ Press `Enter` to execute a movement using a joint state goal ..."
+            "============ Press `Enter` to setup new game ..."
         )
         
         tutorial.go_to_joint_state() #go home
-        tutorial.add_box()
-        #tutorial.move_piece()
+        tutorial.add_box() #add table, checker board, and boxes to scene
 
+        input("============ Press `Enter` to make first move ...")
+        tutorial.plan_and_execute_play(1,16)
 
-        input("============ Press `Enter` to plan and display a Cartesian path to box ...")
-        cartesian_plan, fraction = tutorial.plan_cartesian_path_to_box()
+        input("============ Press `Enter` to make second move ...")
+        tutorial.plan_and_execute_play(16,26)
+
+        input("============ Press `Enter` to make third move ...")
+        tutorial.plan_and_execute_play(5, 13)
+    
 
         """ input(
             "============ Press `Enter` to display a saved trajectory (this will replay the Cartesian path)  ..."
         )
         tutorial.display_trajectory(cartesian_plan) """
 
-        input("============ Press `Enter` to execute a saved path ...")
-        tutorial.execute_plan(cartesian_plan)
-
-        input("============ Press `Enter` to plan and display a Cartesian path to next box ...")
-        tutorial.go_to_joint_state() #go home
-        cartesian_plan2, fraction2 = tutorial.plan_cartesian_path_to_next_box()
         #input("============ Press `Enter` to execute a saved path ...")
-        tutorial.execute_plan(cartesian_plan2)
+        #tutorial.execute_plan(cartesian_plan)
 
+        #input("============ Press `Enter` to plan and display a Cartesian path to next box ...")
+        #tutorial.go_to_joint_state() #go home
+        #cartesian_plan2, fraction2 = tutorial.plan_cartesian_path_to_next_box()
+        #tutorial.execute_plan(cartesian_plan2)
+
+        
         input("============ Press `Enter` to go back ...")
-        """
-        input("============ Press `Enter` to add a box to the planning scene ...")
-        tutorial.add_box()
+        tutorial.go_to_joint_state() #go home
 
-        input("============ Press `Enter` to attach a Box to the Panda robot ...")
-        tutorial.attach_box()
-
-        input(
-            "============ Press `Enter` to plan and execute a path with an attached collision object ..."
-        )
-        cartesian_plan, fraction = tutorial.plan_cartesian_path(scale=-1)
-        tutorial.execute_plan(cartesian_plan)
-
-        input("============ Press `Enter` to detach the box from the Panda robot ...")
-        tutorial.detach_box()
-
-        input(
-            "============ Press `Enter` to remove the box from the planning scene ..."
-        )
-        tutorial.remove_box()
-        """
-        tutorial.go_to_joint_state()
-
-        print("============ Python tutorial demo complete!")
+        print("============ Game Complete!")
     except rospy.ROSInterruptException:
         return
     except KeyboardInterrupt:
